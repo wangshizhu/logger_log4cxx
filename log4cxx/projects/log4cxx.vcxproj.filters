@@ -459,6 +459,9 @@
     <ClCompile Include="..\src\main\cpp\zipcompressaction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\main\cpp\format.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\main\resources\log4cxx.rc">
@@ -995,6 +998,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\main\include\log4cxx\rolling\zipcompressaction.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\main\include\log4cxx\format.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\main\include\log4cxx\singleton.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\main\include\log4cxx\logger_wrapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

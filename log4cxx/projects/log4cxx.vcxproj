@@ -156,7 +156,7 @@
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <Optimization>Disabled</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalIncludeDirectories>..\src\main\include;..\..\apr\include;..\..\apr-util\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src\main\include;..\src\main\include\log4cxx;..\..\apr\include;..\..\apr-util\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;_USRDLL;DLL_EXPORTS;LOG4CXX;APR_DECLARE_STATIC;APU_DECLARE_STATIC;WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AssemblerListingLocation>$(IntDir)\Debug\</AssemblerListingLocation>
       <PrecompiledHeaderOutputFile>.\Debug\log4cxx.pch</PrecompiledHeaderOutputFile>
@@ -536,6 +536,7 @@
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"> /EHsc   /EHsc </AdditionalOptions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'"> /EHsc   /EHsc </AdditionalOptions>
     </ClCompile>
+    <ClCompile Include="..\src\main\cpp\format.cpp" />
     <ClCompile Include="..\src\main\cpp\formattinginfo.cpp">
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"> /EHsc   /EHsc </AdditionalOptions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'"> /EHsc   /EHsc </AdditionalOptions>
@@ -1191,6 +1192,7 @@
     <ClInclude Include="..\src\main\include\log4cxx\filter\mapfilter.h" />
     <ClInclude Include="..\src\main\include\log4cxx\filter\propertyfilter.h" />
     <ClInclude Include="..\src\main\include\log4cxx\filter\stringmatchfilter.h" />
+    <ClInclude Include="..\src\main\include\log4cxx\format.h" />
     <ClInclude Include="..\src\main\include\log4cxx\helpers\absolutetimedateformat.h" />
     <ClInclude Include="..\src\main\include\log4cxx\helpers\appenderattachableimpl.h" />
     <ClInclude Include="..\src\main\include\log4cxx\helpers\aprinitializer.h" />
@@ -1268,6 +1270,7 @@
     <ClInclude Include="..\src\main\include\log4cxx\level.h" />
     <ClInclude Include="..\src\main\include\log4cxx\log4cxx.h" />
     <ClInclude Include="..\src\main\include\log4cxx\logger.h" />
+    <ClInclude Include="..\src\main\include\log4cxx\logger_wrapper.h" />
     <ClInclude Include="..\src\main\include\log4cxx\logmanager.h" />
     <ClInclude Include="..\src\main\include\log4cxx\logstring.h" />
     <ClInclude Include="..\src\main\include\log4cxx\mdc.h" />
@@ -1327,6 +1330,7 @@
     <ClInclude Include="..\src\main\include\log4cxx\rolling\triggeringpolicy.h" />
     <ClInclude Include="..\src\main\include\log4cxx\rolling\zipcompressaction.h" />
     <ClInclude Include="..\src\main\include\log4cxx\simplelayout.h" />
+    <ClInclude Include="..\src\main\include\log4cxx\singleton.h" />
     <ClInclude Include="..\src\main\include\log4cxx\spi\appenderattachable.h" />
     <ClInclude Include="..\src\main\include\log4cxx\spi\configurator.h" />
     <ClInclude Include="..\src\main\include\log4cxx\spi\defaultrepositoryselector.h" />
