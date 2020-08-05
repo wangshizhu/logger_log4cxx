@@ -1,5 +1,7 @@
 /_objs/*
 /libs/*
+/test/test*/libs/*
+/test/test*/_objs/*
 *.suo
 *.user
 *.ncb
