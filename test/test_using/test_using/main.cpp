@@ -6,7 +6,7 @@
 int main()
 {
 	{
-		if (!logger::Logger::GetInstancePtr()->Init(nullptr,"D:/work/logger_log4cxx/test/test_using/config/log4j.properties"))
+		if (!logger::Logger::GetInstancePtr()->Init(nullptr, "../config/log4j.properties"))
 		{
 			std::cout << "logger init failed" << std::endl;
 			return 0;

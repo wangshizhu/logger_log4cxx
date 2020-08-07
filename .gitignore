@@ -1,5 +1,6 @@
 /_objs/*
 /libs/*
+/test/test*/log/*
 /test/test*/libs/*
 /test/test*/_objs/*
 *.suo
