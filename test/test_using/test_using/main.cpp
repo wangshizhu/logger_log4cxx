@@ -6,14 +6,15 @@
 int main()
 {
 	{
-		if (!logger::Logger::GetInstancePtr()->Init("test", "../config/log4j.properties"))
+		if (!logger::Logger::GetInstancePtr()->Init("../config/log4j.properties"))
 		{
 			std::cout << "logger init failed" << std::endl;
 			return 0;
 		}
 
 		LOG_INFO("logger test using");
-		LOG_INFO("logger test using again");
+		NAMED_DEBUG_INFO("test","logger test using in test");
+		NAMED_LOG_INFO("testex", "logger test using in testex");
 	}
 
 	system("pause");
