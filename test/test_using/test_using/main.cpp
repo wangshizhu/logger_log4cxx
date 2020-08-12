@@ -14,6 +14,7 @@ int main()
 
 		LOG_INFO("logger test using");
 		NAMED_DEBUG_INFO("test","logger test using in test");
+		NAMED_DEBUG_INFO("testex", "debug logger test using in testex");
 		NAMED_LOG_INFO("testex", "logger test using in testex");
 	}
 
