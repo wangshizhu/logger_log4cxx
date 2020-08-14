@@ -3,6 +3,10 @@
 #define LOGGER_WRAPPER_H_
 
 #include <string>
+#include <list>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
 
 #include "log4cxx/logger.h"
 #include "log4cxx/logmanager.h"
@@ -18,6 +22,9 @@
 
 namespace logger
 {
+
+#define MIN_THREAD_NUM 1
+#define MAX_THREAD_NUM 4
 
 #define LOGGER_LOG4CXX_ERROR(logger, s)	\
 	{	\
@@ -69,6 +76,16 @@ namespace logger
 		}	\
     }
 
+#define LOGGER_LOG4CXX_TRACE(logger, s)	\
+	{	\
+		try {	\
+			LOG4CXX_TRACE(logger, s);	\
+		}	\
+		catch (const log4cxx::helpers::IOException& ioex) {	\
+			printf("IOException: %s\nTRACE=%s\n", ioex.what(), s.c_str());	\
+		}	\
+    }
+
 #define LOGGER_LOG4CXX_LOG(logger, level, s)	\
 	{	\
 		try {	\
@@ -79,15 +96,108 @@ namespace logger
 		}	\
     }
 
+	using FunType = std::function<void(void)>;
+
 	class Logger : public Singleton<Logger>
 	{
 	public:
-		Logger() 
+
+		Logger():stop_(false)
 		{
+			log_msg_.clear();
+			thread_.clear();
 		}
 
 		~Logger() 
 		{
+		}
+
+	public:
+
+		void Start(int thread_num)
+		{
+			if (thread_num < MIN_THREAD_NUM)
+			{
+				thread_num = MIN_THREAD_NUM;
+			}
+			if (thread_num > MAX_THREAD_NUM)
+			{
+				thread_num = MAX_THREAD_NUM;
+			}
+
+			for (int i = 0; i < thread_num; i++)
+			{
+				thread_.push_back(std::thread(&Logger::Run,this));
+			}
+		}
+
+		void Run()
+		{
+			while (true)
+			{
+				/*int times = 0;
+				std::unique_lock<std::mutex> lock(mtx_);
+				while (log_msg_.empty())
+				{
+					++times;
+					cv_.wait(lock);
+				}
+
+				printf("times %d\n", times);*/
+
+				std::unique_lock<std::mutex> lock(mtx_);
+				if (stop_)
+				{
+					if (log_msg_.empty())
+					{
+						return;
+					}
+					else
+					{
+						FunType& func = *log_msg_.begin();
+
+						func();
+
+						log_msg_.pop_front();
+					}
+				}
+				else 
+				{
+					while (log_msg_.empty())
+					{
+						if (stop_)
+						{
+							return;
+						}
+						cv_.wait(lock);
+					}
+
+					FunType& func = *log_msg_.begin();
+
+					func();
+
+					log_msg_.pop_front();
+				}
+			}
+		}
+
+		void Stop()
+		{
+			if (stop_)
+			{
+				return;
+			}
+			stop_ = true;
+
+			cv_.notify_all();
+		}
+
+		void Join()
+		{
+			for (auto&& one : thread_)
+			{
+				one.join();
+			}
 		}
 
 		bool Init(const char* conf = nullptr)
@@ -118,47 +228,17 @@ namespace logger
 				return false;
 			}
 		}
-	
-	public:
 
-		template<class... Args>
-		void DebugInfo(log4cxx::LoggerPtr p,const char* func_name,
-			const char* file_name, int line_num,
-			const char* msg, Args&&... args) const
-		{
-			LOGGER_LOG4CXX_DEBUG(p, Formater(func_name,file_name,line_num,msg, std::forward<decltype(args)>(args)...));
-		}
+	private:
 
-		template<class... Args>
-		void ErrorInfo(log4cxx::LoggerPtr p,const char* func_name,
-			const char* file_name, int line_num,
-			const char* msg, Args&&... args) const
+		static log4cxx::LoggerPtr GetLoggerByName(const std::string& name)
 		{
-			LOGGER_LOG4CXX_ERROR(p, Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...));
-		}
+			if (name.size() == 0)
+			{
+				return log4cxx::Logger::getRootLogger();
+			}
 
-		template<class... Args>
-		void LogInfo(log4cxx::LoggerPtr p,const char* func_name,
-			const char* file_name, int line_num,
-			const char* msg, Args&&... args) const
-		{
-			LOGGER_LOG4CXX_INFO(p, Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...));
-		}
-
-		template<class... Args>
-		void FatalInfo(log4cxx::LoggerPtr p, const char* func_name,
-			const char* file_name, int line_num,
-			const char* msg, Args&&... args) const
-		{
-			LOGGER_LOG4CXX_FATAL(p, Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...));
-		}
-
-		template<class... Args>
-		void WarnInfo(log4cxx::LoggerPtr p, const char* func_name,
-			const char* file_name, int line_num,
-			const char* msg, Args&&... args) const
-		{
-			LOGGER_LOG4CXX_WARN(p, Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...));
+			return log4cxx::Logger::getLogger(name);
 		}
 
 		template<class... Args>
@@ -166,25 +246,75 @@ namespace logger
 			const char* file_name, int line_num,
 			const char* msg, Args&&... args) const
 		{
-			auto&& func_info = fmt::format("file:{0},function:{1},line:{2},msg:{3}", file_name, func_name, line_num, msg);
+			auto&& func_info = fmt::format("file:{0},function:{1},line:{2},thread:{3},msg:{4}", file_name, func_name, line_num, std::this_thread::get_id(), msg);
 
 			return fmt::format(func_info, std::forward<decltype(args)>(args)...);
 		}
+	
+	public:
+
+		template<class... Args>
+		void Log(int level,std::string name, const char* func_name,
+			const char* file_name, int line_num,
+			const char* msg, Args&&... args)
+		{
+			auto&& formate_msg = Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...);
+
+			{
+				std::unique_lock<std::mutex> lock(mtx_);
+
+				log_msg_.emplace_back([lv = level, logger_name = std::move(name), data = std::move(formate_msg)]
+				{
+					switch (lv)
+					{
+					case log4cxx::Level::DEBUG_INT:
+						LOGGER_LOG4CXX_DEBUG(Logger::GetLoggerByName(logger_name), data);
+						break;
+					case log4cxx::Level::INFO_INT:
+						LOGGER_LOG4CXX_INFO(Logger::GetLoggerByName(logger_name), data);
+						break;
+					case log4cxx::Level::ERROR_INT:
+						LOGGER_LOG4CXX_ERROR(Logger::GetLoggerByName(logger_name), data);
+						break;
+					case log4cxx::Level::WARN_INT:
+						LOGGER_LOG4CXX_WARN(Logger::GetLoggerByName(logger_name), data);
+						break;
+					case log4cxx::Level::FATAL_INT:
+						LOGGER_LOG4CXX_FATAL(Logger::GetLoggerByName(logger_name), data);
+						break;
+					case log4cxx::Level::TRACE_INT:
+						LOGGER_LOG4CXX_TRACE(Logger::GetLoggerByName(logger_name), data);
+						break;
+					}
+
+				});
+			}
+
+			cv_.notify_one();
+		}
+
+	private:
+
+		std::list<FunType> log_msg_;
+		std::vector<std::thread> thread_;
+		std::condition_variable cv_;
+		std::mutex mtx_;
+		std::atomic<bool> stop_;
 
 	};
 	
 }
 
-#define DEBUG_INFO(m,...) logger::Logger::GetInstancePtr()->DebugInfo(log4cxx::Logger::getRootLogger(),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define ERROR_INFO(m,...) logger::Logger::GetInstancePtr()->ErrorInfo(log4cxx::Logger::getRootLogger(),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define LOG_INFO(m,...) logger::Logger::GetInstancePtr()->LogInfo(log4cxx::Logger::getRootLogger(),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define FATAL_INFO(m,...) logger::Logger::GetInstancePtr()->FatalInfo(log4cxx::Logger::getRootLogger(),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define WARN_INFO(m,...) logger::Logger::GetInstancePtr()->WarnInfo(log4cxx::Logger::getRootLogger(),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define DEBUG_INFO(m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::DEBUG_INT,"",__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define ERROR_INFO(m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::ERROR_INT,"",__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define LOG_INFO(m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::INFO_INT,"",__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define FATAL_INFO(m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::FATAL_INT,"",__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define WARN_INFO(m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::WARN_INT,"",__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 
-#define NAMED_DEBUG_INFO(name,m,...) logger::Logger::GetInstancePtr()->DebugInfo(log4cxx::Logger::getLogger(name),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define NAMED_ERROR_INFO(name,m,...) logger::Logger::GetInstancePtr()->ErrorInfo(log4cxx::Logger::getLogger(name),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define NAMED_LOG_INFO(name,m,...) logger::Logger::GetInstancePtr()->LogInfo(log4cxx::Logger::getLogger(name),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define NAMED_FATAL_INFO(name,m,...) logger::Logger::GetInstancePtr()->FatalInfo(log4cxx::Logger::getLogger(name),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define NAMED_WARN_INFO(name,m,...) logger::Logger::GetInstancePtr()->WarnInfo(log4cxx::Logger::getLogger(name),__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_DEBUG_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::DEBUG_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_ERROR_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::ERROR_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_LOG_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::INFO_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_FATAL_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::FATAL_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_WARN_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::WARN_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 
 #endif
