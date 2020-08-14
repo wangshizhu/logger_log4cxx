@@ -135,16 +135,6 @@ namespace logger
 		{
 			while (true)
 			{
-				/*int times = 0;
-				std::unique_lock<std::mutex> lock(mtx_);
-				while (log_msg_.empty())
-				{
-					++times;
-					cv_.wait(lock);
-				}
-
-				printf("times %d\n", times);*/
-
 				std::unique_lock<std::mutex> lock(mtx_);
 				if (stop_)
 				{
