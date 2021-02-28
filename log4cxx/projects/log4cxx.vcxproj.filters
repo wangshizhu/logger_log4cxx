@@ -1009,5 +1009,8 @@
     <ClInclude Include="..\src\main\include\log4cxx\logger_wrapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\main\include\log4cxx\concurrentqueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

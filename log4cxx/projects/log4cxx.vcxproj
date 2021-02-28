@@ -1175,6 +1175,7 @@
     <ClInclude Include="..\src\main\include\log4cxx\appenderskeleton.h" />
     <ClInclude Include="..\src\main\include\log4cxx\asyncappender.h" />
     <ClInclude Include="..\src\main\include\log4cxx\basicconfigurator.h" />
+    <ClInclude Include="..\src\main\include\log4cxx\concurrentqueue.h" />
     <ClInclude Include="..\src\main\include\log4cxx\config\propertysetter.h" />
     <ClInclude Include="..\src\main\include\log4cxx\consoleappender.h" />
     <ClInclude Include="..\src\main\include\log4cxx\dailyrollingfileappender.h" />

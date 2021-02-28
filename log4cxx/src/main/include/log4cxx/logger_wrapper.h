@@ -6,6 +6,7 @@
 #include <list>
 #include <thread>
 #include <atomic>
+#include "stdio.h"
 #include <condition_variable>
 
 #include "log4cxx/logger.h"
@@ -19,6 +20,7 @@
 #include "log4cxx/basicconfigurator.h"
 #include "log4cxx/singleton.h"
 #include "log4cxx/format.h"
+#include "concurrentqueue.h"
 
 namespace logger
 {
@@ -102,7 +104,7 @@ namespace logger
 	{
 	public:
 
-		Logger():stop_(false)
+		Logger():stop_(false), log_msg_lock_free_(1000)
 		{
 			log_msg_.clear();
 			thread_.clear();
@@ -110,6 +112,7 @@ namespace logger
 
 		~Logger() 
 		{
+			fclose(tmp_file_);
 		}
 
 	public:
@@ -127,7 +130,39 @@ namespace logger
 
 			for (int i = 0; i < thread_num; i++)
 			{
-				thread_.push_back(std::thread(&Logger::Run,this));
+				thread_.push_back(std::thread(&Logger::RunNonblockQueue,this));
+			}
+		}
+
+		void RunNonblockQueue()
+		{
+			while (true)
+			{
+				
+				if (stop_)
+				{
+					FunType func;
+					bool ok = log_msg_lock_free_.try_dequeue(func);
+					if (!ok)
+					{
+						return;
+					}
+
+					func();
+				}
+				else
+				{
+					FunType func;
+					bool ok = log_msg_lock_free_.try_dequeue(func);
+					if (!ok)
+					{
+						std::unique_lock<std::mutex> lock(mtx_);
+						cv_.wait(lock);
+						continue;
+					}
+
+					func();
+				}
 			}
 		}
 
@@ -192,6 +227,12 @@ namespace logger
 
 		bool Init(const char* conf = nullptr)
 		{
+			/*tmp_file_ = fopen("../log/test_log.log","w");
+			if (tmp_file_ == nullptr)
+			{
+				return false;
+			}*/
+
 			try
 			{
 				log4cxx::Logger::getRootLogger();
@@ -244,10 +285,105 @@ namespace logger
 	public:
 
 		template<class... Args>
+		void NonBlockConcurrentLog(int level, std::string name, const char* func_name,
+			const char* file_name, int line_num,
+			const char* msg, Args&&... args)
+		{
+			auto logger = Logger::GetLoggerByName(name);
+			if (logger->getLevel()->toInt() > level)
+			{
+				return;
+			}
+
+			auto&& formate_msg = Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...);
+
+			bool ok = log_msg_lock_free_.enqueue([lv = level, logger_name = std::move(name), data = std::move(formate_msg)]
+			{
+				switch (lv)
+				{
+				case log4cxx::Level::DEBUG_INT:
+					LOGGER_LOG4CXX_DEBUG(Logger::GetLoggerByName(logger_name), data);
+					break;
+				case log4cxx::Level::INFO_INT:
+					LOGGER_LOG4CXX_INFO(Logger::GetLoggerByName(logger_name), data);
+					break;
+				case log4cxx::Level::ERROR_INT:
+					LOGGER_LOG4CXX_ERROR(Logger::GetLoggerByName(logger_name), data);
+					break;
+				case log4cxx::Level::WARN_INT:
+					LOGGER_LOG4CXX_WARN(Logger::GetLoggerByName(logger_name), data);
+					break;
+				case log4cxx::Level::FATAL_INT:
+					LOGGER_LOG4CXX_FATAL(Logger::GetLoggerByName(logger_name), data);
+					break;
+				case log4cxx::Level::TRACE_INT:
+					LOGGER_LOG4CXX_TRACE(Logger::GetLoggerByName(logger_name), data);
+					break;
+				}
+
+			});
+
+			if (!ok)
+			{
+				std::cout << "enqueue failed" << std::endl;
+			}
+			else
+			{
+				cv_.notify_all();
+			}
+		}
+
+		template<class... Args>
+		void ProductThreadLog(int level, 
+			std::string name, 
+			const char* func_name,
+			const char* file_name, 
+			int line_num,
+			const char* msg, 
+			Args&&... args)
+		{
+			auto logger = Logger::GetLoggerByName(name);
+			if (logger->getLevel()->toInt() > level)
+			{
+				return;
+			}
+
+			auto&& formate_msg = Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...);
+
+			switch (level)
+			{
+			case log4cxx::Level::DEBUG_INT:
+				LOGGER_LOG4CXX_DEBUG(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			case log4cxx::Level::INFO_INT:
+				LOGGER_LOG4CXX_INFO(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			case log4cxx::Level::ERROR_INT:
+				LOGGER_LOG4CXX_ERROR(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			case log4cxx::Level::WARN_INT:
+				LOGGER_LOG4CXX_WARN(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			case log4cxx::Level::FATAL_INT:
+				LOGGER_LOG4CXX_FATAL(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			case log4cxx::Level::TRACE_INT:
+				LOGGER_LOG4CXX_TRACE(Logger::GetLoggerByName(name), formate_msg);
+				break;
+			}
+		}
+
+		template<class... Args>
 		void Log(int level,std::string name, const char* func_name,
 			const char* file_name, int line_num,
 			const char* msg, Args&&... args)
 		{
+			auto logger = Logger::GetLoggerByName(name);
+			if (logger->getLevel()->toInt() > level)
+			{
+				return;
+			}
+
 			auto&& formate_msg = Formater(func_name, file_name, line_num, msg, std::forward<decltype(args)>(args)...);
 
 			{
@@ -286,10 +422,12 @@ namespace logger
 	private:
 
 		std::list<FunType> log_msg_;
+		moodycamel::ConcurrentQueue<FunType> log_msg_lock_free_;
 		std::vector<std::thread> thread_;
 		std::condition_variable cv_;
 		std::mutex mtx_;
 		std::atomic<bool> stop_;
+		FILE* tmp_file_;
 
 	};
 	
@@ -303,7 +441,7 @@ namespace logger
 
 #define NAMED_DEBUG_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::DEBUG_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 #define NAMED_ERROR_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::ERROR_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
-#define NAMED_LOG_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::INFO_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
+#define NAMED_LOG_INFO(name,m,...) logger::Logger::GetInstancePtr()->NonBlockConcurrentLog(log4cxx::Level::INFO_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 #define NAMED_FATAL_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::FATAL_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 #define NAMED_WARN_INFO(name,m,...) logger::Logger::GetInstancePtr()->Log(log4cxx::Level::WARN_INT,name,__FUNCTION__,__FILE__,__LINE__,(m),##__VA_ARGS__)
 
